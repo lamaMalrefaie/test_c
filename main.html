@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Json Extractor</title>
+    <style>
+        body {
+            background-image: url('back.png');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            color: white;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 100px;
+            height: calc(100vh - 100px);
+        }
+        .title {
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+            color: white;
+        }
+        .boxes {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            max-width: 100%;
+        }
+        .box, .beuti-box, .output-box {
+            margin: 10px;
+            padding: 10px;
+            width: 600px;
+            height: 700px;
+            overflow: auto;
+        }
+        .box {
+            background-color: white;
+            color: black;
+            border: 2px solid black;
+        }
+        .beuti-box {
+            background-color: #88b5e2;
+            color: black;
+            border: 2px solid black;
+        }
+        .output-box {
+            background-color: #020100;
+            color: #8fbc8f;
+            border: 2px solid black;
+            font-weight: bold;
+        }
+        .arrow-box, .clear-box {
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 10px;
+        }
+        .arrow {
+            border: 1px solid white;
+            width: 50px;
+            height: 50px;
+            font-size: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .clear-box {
+            background-color: #fdf8f8;
+            color: black;
+            width: 3cm;
+            height: 80px;
+            border: 2px solid black;
+        }
+        .clear-box:hover {
+            background-color: #f1efef;
+        }
+        textarea {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: white;
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="title">Claims Json Extractor</div>
+        <div class="boxes">
+            <textarea id="inputBox" class="box" placeholder="Paste your JSON text here"></textarea>
+            <div class="arrow-box" onclick="processJson()">
+                <div class="arrow">&#8594;</div>
+            </div>
+            <textarea id="beutiBox" class="beuti-box" readonly></textarea>
+            <div id="outputBox" class="output-box"></div>
+        </div>
+        <div class="clear-box" onclick="clearContent()">Clear</div>
+    </div>
+    <script>
+        function processJson() {
+            var inputText = document.getElementById('inputBox').value;
+            try {
+                var jsonObj = JSON.parse(inputText);
+                var prettyJson = JSON.stringify(jsonObj, null, 2);
+                document.getElementById('beutiBox').value = prettyJson;
+            } catch (e) {
+                document.getElementById('beutiBox').value = 'Invalid JSON: ' + e.message;
+                document.getElementById('outputBox').innerText = '';
+                return;
+            }
+            processProductOrService(prettyJson);
+        }
+
+        function clearContent() {
+            document.getElementById('inputBox').value = '';
+            document.getElementById('beutiBox').value = '';
+            document.getElementById('outputBox').innerText = '';
+        }
+
+        function processProductOrService(prettyJsonText) {
+            var serviceResults = '';
+
+            // معالجة OP
+            var servicePatternOP = '"extension":\\s*\\[[\\s\\S]+?"productOrService":\\s*{[\\s\\S]+?}';
+            var serviceMatchesOP = prettyJsonText.match(new RegExp(servicePatternOP, 'gi'));
+            if (serviceMatchesOP && serviceMatchesOP.length > 0) {
+                serviceResults += `<div style="font-weight: bold; font-size: 24px;">Total OP Services: ${serviceMatchesOP.length}</div>`;
+                extractServices(serviceMatchesOP, "OP", serviceResults);
+            }
+
+            // معالجة IP
+            var servicePatternIP = '"item":\\s*\\[[\\s\\S]*?"productOrService":\\s*{[\\s\\S]+?}';
+            var serviceMatchesIP = prettyJsonText.match(new RegExp(servicePatternIP, 'gi'));
+            if (serviceMatchesIP && serviceMatchesIP.length > 0) {
+                serviceResults += `<div style="font-weight: bold; font-size: 24px;">Total IP Services: ${serviceMatchesIP.length}</div>`;
+                extractServices(serviceMatchesIP, "IP", serviceResults);
+            }
+
+            if (!serviceMatchesOP && !serviceMatchesIP) {
+                serviceResults += '<div style="color: red; font-weight: bold;">No OP or IP services found.</div>';
+            }
+
+            document.getElementById('outputBox').innerHTML = serviceResults;
+        }
+
+        function extractServices(serviceMatches, type, serviceResults) {
+            for (var i = 0; i < serviceMatches.length; i++) {
+                var currentMatch = serviceMatches[i];
+
+                var patterns = {
+                    "Patient Invoice": '"valueIdentifier":\\s*{[\\s\\S]*?"value":\\s*"([^"]+)"',
+                    "Extension Tax": '"extension-tax"[\\s\\S]*?"value":\\s*([\\d.]+)',
+                    "Patient Share": '"extension-patient-share"[\\s\\S]*?"value":\\s*([\\d.]+)',
+                    "Payer Share": '"extension-payer-share"[\\s\\S]*?"value":\\s*([\\d.]+)',
+                    "Nphies Code": '"code":\\s*"([^"]+)"',
+                    "Service Code": '"serviceCode":\\s*"([^"]+)"',
+                    "Name": '"display":\\s*"([^"]+)"',
+                    "Serviced Date": '"servicedDate":\\s*"([^"]+)"',
+                    "Serviced Period Start": '"servicedPeriod":\\s*{[\\s\\S]*?"start":\\s*"([^"]+)"',
+                    "Quantity": '"quantity":\\s*{\\s*"value":\\s*(\\d+)',
+                    "Unit Price": '"unitPrice":\\s*{[\\s\\S]*?"value":\\s*([\\d.]+)',
+                    "Net Value": '"net":\\s*{[\\s\\S]*?"value":\\s*([\\d.]+)'
+                };
+
+                serviceResults += `-----------------------------------------------------------------------------------<br><br>${type} Product/Service ${i + 1} <br>`;
+                
+                for (var key in patterns) {
+                    var match = currentMatch.match(new RegExp(patterns[key], 'i'));
+                    var value = match && match[1] ? copyButton(match[1]) : 'Not found';
+                    serviceResults += `${key}: ${value} <br>`;
+                }
+            }
+        }
+
+        function copyButton(text) {
+            return `<span style="cursor: pointer; text-decoration: underline;" onclick="copyToClipboard('${text}')">${text}</span>`;
+        }
+
+        function copyToClipboard(text) {
+            var dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = text;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+            alert('Copied: ' + text);
+        }
+    </script>
+</body>
+</html>
