@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Json Extractor</title>
+    <title> Json Extractor </title>
     <style>
         body {
-            background-image: url('back (1).png');
+            background-image: url('back.png');
             background-size: cover;
             background-repeat: no-repeat;
             background-attachment: fixed;
@@ -36,51 +36,63 @@
             justify-content: center;
             max-width: 100%;
         }
-        .box, .beuti-box, .output-box {
+        .box {
+            border: 2px solid black;
+            background-color: white;
+            margin: 10px;
+            padding: 10px;
+            color: black;
+            width: 300px;
+            height: 600px;
+        }
+        .beuti-box {
+            background-color: #88b5e2;
+            color: black;
+            border: 2px solid black;
             margin: 10px;
             padding: 10px;
             width: 600px;
             height: 700px;
             overflow: auto;
         }
-        .box {
-            background-color: white;
-            color: black;
-            border: 2px solid black;
-        }
-        .beuti-box {
-            background-color: #88b5e2;
-            color: black;
-            border: 2px solid black;
-        }
         .output-box {
             background-color: #020100;
             color: #8fbc8f;
-            border: 2px solid black;
+            border: 2px solid #000000;
+            margin: 10px;
+            padding: 10px;
+            width: 600px;
+            height: 700px;
+            overflow: auto;
             font-weight: bold;
         }
-        .arrow-box, .clear-box {
-            cursor: pointer;
+        .arrow-box {
             display: flex;
             justify-content: center;
             align-items: center;
+            cursor: pointer;
             margin: 10px;
         }
         .arrow {
             border: 1px solid white;
             width: 50px;
             height: 50px;
-            font-size: 24px;
             display: flex;
             justify-content: center;
             align-items: center;
+            font-size: 24px;
         }
         .clear-box {
-            background-color: #fdf8f8;
-            color: black;
             width: 3cm;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            color: rgb(8, 2, 2);
             height: 80px;
             border: 2px solid black;
+            background-color: #fdf8f8;
+            margin: 10px 0;
         }
         .clear-box:hover {
             background-color: #f1efef;
@@ -90,7 +102,7 @@
             height: 100%;
             border: none;
             background-color: white;
-            color: black;
+            color: #000003;
         }
     </style>
 </head>
@@ -114,12 +126,18 @@
                 var jsonObj = JSON.parse(inputText);
                 var prettyJson = JSON.stringify(jsonObj, null, 2);
                 document.getElementById('beutiBox').value = prettyJson;
+                if (jsonObj.fullUrl && jsonObj.fullUrl.includes("https://Bupa.com.sa/MessageHeader")) {
+                    var match = jsonObj.fullUrl.match(/https:\/\/(\w+)\.com\.sa\/MessageHeader/);
+                    if (match && match[1] != "Bupa") {
+                        alert("Wrong response to Bupa company");
+                    }
+                }
             } catch (e) {
                 document.getElementById('beutiBox').value = 'Invalid JSON: ' + e.message;
                 document.getElementById('outputBox').innerText = '';
                 return;
             }
-            processProductOrService(prettyJson);
+            searchJson(prettyJson);
         }
 
         function clearContent() {
@@ -128,63 +146,276 @@
             document.getElementById('outputBox').innerText = '';
         }
 
-        function processProductOrService(prettyJsonText) {
-            var serviceResults = '';
+        var ServicedDatePattern = '"servicedDate":\\s*"([^"]+)"';
 
-            // معالجة OP
-            var servicePatternOP = '"extension":\\s*\\[[\\s\\S]+?"productOrService":\\s*{[\\s\\S]+?}';
-            var serviceMatchesOP = prettyJsonText.match(new RegExp(servicePatternOP, 'gi'));
-            if (serviceMatchesOP && serviceMatchesOP.length > 0) {
-                serviceResults += `<div style="font-weight: bold; font-size: 24px;">Total OP Services: ${serviceMatchesOP.length}</div>`;
-                extractServices(serviceMatchesOP, "OP", serviceResults);
+        function searchJson(prettyJsonText) {
+            try {
+                var searchPatterns = {
+                    'resourceType': '"eventCoding":\\s*{\\s*"system":\\s*"[^"]*",\\s*"code":\\s*"([^"]+)"',
+                    'Bundle ID': '"Bundle"[\\s\\S]*?"id":\\s*"([^"]+)"',
+                    'Claim Type': '/CodeSystem/claim-type"[\\s\\S]*?"code":\\s*"([^"]+)"',
+                    'Claim Sub-type': '/CodeSystem/claim-subtype"[\\s\\S]*?"code":\\s*"([^"]+)"',
+                    'Member ID': '/memberid"[\\s\\S]*?"value":\\s*"([^"]+)"',
+                    'National or Iqama ID': '(?:nphies\\.sa/identifier/nationalid|sa/identifier/iqama)"[\\s\\S]*?"value":\\s*"([\\d]+)"',
+                    'Organization ID': '.sa/license/provider-license"[\\s\\S]*?"value":\\s*"([^"]+)"',
+                    'preAuthRef': '"preAuthRef":\\s*\\[\\s*"([^"]+)"\\s*\\]',
+                    'Gender': '"gender":\\s*"([^"]+)"',
+                    'Extension Episode': '"url":\\s*"http://nphies.sa/fhir/ksa/nphies-fs/StructureDefinition/extension-episode"[\\s\\S]*?"value":\\s*"([^"]+)"',
+                    'Practitioner License': '"system":\\s*"http://nphies.sa/license/practitioner-license",\\s*"value":\\s*"([^"]+)"',
+                    'Accounting Period Value Date': '"url":\\s*"http://nphies.sa/fhir/ksa/nphiesfs/StructureDefinition/extension-accountingPeriod"[\\s\\S]*?"valueDate":\\s*"([^"]+)"',
+                    'Specialty Code': '"specialty":\\s*\\[[\\s\\S]*?"code":\\s*"([^"]+)"',
+                    'Timestamp': '"timestamp":\\s*"([^"]+)"',
+                    'Claim ID': '"system":\\s*"[^"]*/claim",\\s*"value":\\s*"([^"]+)"',
+                    'Practitioner Name': '"system":\\s*"http://nphies.sa/license/practitioner-license"[\\s\\S]*?"name"\\s*:\\s*\\[\\s*{\\s*"text"\\s*:\\s*"([^"]+)"',
+                    'PPatient Name': '"system":\\s*"http://sghj.com/identifier/mrn",\\s*"value":\\s*"([^"]+)"', 
+                    'Patient Name': '"name":\\s*\\[[\\s\\S]*?"text":\\s*"([^"]+)"',
+                    'ICD-10 Code (Sequence 1)': '"diagnosisCodeableConcept":\\s*{[\\s\\S]*?"system":\\s*"http://hl7.org/fhir/sid/icd-10-am",[\\s\\S]*?"code":\\s*"([^"]+)"[\\s\\S]*?"sequence":\\s*1',
+                    'Diagnosis Type (Sequence 1)': '"type":\\s*\\[[\\s\\S]*?"system":\\s*"http://nphies.sa/terminology/CodeSystem/diagnosis-type",[\\s\\S]*?"code":\\s*"([^"]+)"[\\s\\S]*?"sequence":\\s*1'
+                };
+
+
+
+                var results = '';
+                var errorMessages = [];
+                var licensePattern = '"system":\\s*"http://nphies.sa/license/payer-license",\\s*"value":\\s*"([^"]+)"';
+                var licenseMatch = prettyJsonText.match(new RegExp(licensePattern, 'i'));
+                if (licenseMatch && licenseMatch[1] !== '7001571327') {
+                    errorMessages.push('it is not bupa License');
+                }
+
+                for (var key in searchPatterns) {
+                    var regex = new RegExp(searchPatterns[key], 'i');
+                    var match = prettyJsonText.match(regex);
+                    var value = match && match[1];
+                    // if (value) {
+                    //     if (key === 'National or Iqama ID' && !/^\d{10}$/.test(value)) {
+                    //         errorMessages.push('Error: National or Iqama ID should be exactly 10 digits.');
+                    //     } else if (key === 'Member ID' && !/^\d{8}$/.test(value)) {
+                    //         errorMessages.push('Error: Member ID should be exactly 8 digits.');
+                    //     } else {
+                    //         results += key + ': ' + copyButton(value) + '<br>';
+                    //     }
+                    // } else {
+                    //     results += key + ': Not found<br>';
+                    // }
+                    results += key + ': ' + (value ? copyButton(value) : 'Not found') + '<br>';
+                }
+
+                var licensePattern = '"system":\\s*"http://nphies.sa/license/payer-license",\\s*"value":\\s*"([^"]+)"';
+                var licenseMatch = prettyJsonText.match(new RegExp(licensePattern, 'i'));
+                if (licenseMatch && licenseMatch[1] !== '7001571327') {
+                    errorMessages.push('it is not Bupa License');
+                }
+
+                if (errorMessages.length > 0) {
+                    alert(errorMessages.join('\n'));
+                }
+
+                document.getElementById('outputBox').innerHTML = results;
+                processProductOrService(prettyJsonText, results);
+            } catch (e) {
+                document.getElementById('outputBox').innerText = 'Error parsing JSON: ' + e.message;
+            }
+            try {
+                var jsonObj = JSON.parse(prettyJsonText);
+                var licensePattern = /"system":\s*"http:\/\/nphies\.sa\/license\/payer-license",\s*"value":\s*"([^"]+)"/g;
+                var match;
+                var licenseCount = 0;
+                var correctLicenseCount = 0;
+                var incorrectLicenses = [];
+
+                while (match = licensePattern.exec(prettyJsonText)) {
+                    licenseCount++;
+                    if (match[1] === "7001571327") {
+                        correctLicenseCount++;
+                    } else {
+                        incorrectLicenses.push(match[1]);
+                    }
+                }
+
+                if (incorrectLicenses.length > 0) {
+                    incorrectLicenses.forEach((license, index) => {
+                        alert("Number (" + (index + 1) + ") is not Bupa license: " + license);
+                    });
+                }
+
+                document.getElementById('outputBox').innerHTML = "Total licenses found: " + licenseCount + "<br>Correct license '456789098765' found: " + correctLicenseCount;
+                var optionalPatterns = {
+                    'Outcome': '"outcome":\\s*"([^"]+)"',
+                    'Disposition': '"disposition":\\s*"([^"]+)"'
+                };
+
+                var results = '';
+                var errorMessages = [];
+                for (var key in searchPatterns) {
+                    var regex = new RegExp(searchPatterns[key], 'i');
+                    var match = prettyJsonText.match(regex);
+                    var value = match && match[1];
+                    if (value) {
+                        if (key === 'National or Iqama ID' && !/^\d{10}$/.test(value)) {
+                            errorMessages.push('Error: National or Iqama ID should be exactly 10 digits.');
+                        } else if (key === 'Member ID' && !/^\d{8}$/.test(value)) {
+                            errorMessages.push('Error: Member ID should be exactly 8 digits.');
+                        } else {
+                            results += key + ': ' + copyButton(value) + '<br>';
+                        }
+                    } else {
+                        results += key + ': Not found<br>';
+                    }
+                }
+
+                for (var key in optionalPatterns) {
+                    var regex = new RegExp(optionalPatterns[key], 'i');
+                    var match = prettyJsonText.match(regex);
+                    if (match) {
+                        results += key + ': ' + match[1] + '<br>';
+                    }
+                }
+
+                if (errorMessages.length > 0) {
+                    alert(errorMessages.join('\n'));
+                }
+
+                document.getElementById('outputBox').innerHTML = results;
+                processProductOrService(prettyJsonText, results);
+            } catch (e) {
+                document.getElementById('outputBox').innerText = 'Error parsing JSON: ' + e.message;
             }
 
-            // معالجة IP
-            var servicePatternIP = '"item":\\s*\\[[\\s\\S]*?"productOrService":\\s*{[\\s\\S]+?}';
-            var serviceMatchesIP = prettyJsonText.match(new RegExp(servicePatternIP, 'gi'));
-            if (serviceMatchesIP && serviceMatchesIP.length > 0) {
-                serviceResults += `<div style="font-weight: bold; font-size: 24px;">Total IP Services: ${serviceMatchesIP.length}</div>`;
-                extractServices(serviceMatchesIP, "IP", serviceResults);
-            }
+            processProductOrService(prettyJsonText, results);
 
-            if (!serviceMatchesOP && !serviceMatchesIP) {
-                serviceResults += '<div style="color: red; font-weight: bold;">No OP or IP services found.</div>';
+            
+        }
+
+        function processProductOrService(prettyJsonText, previousResults = '') {
+            var servicePattern =  '"extension":\\s*\\[[\\s\\S]+?"productOrService":\\s*{[\\s\\S]+?},[\\s\\S]*?"quantity":\\s*{\\s*"value":\\s*(\\d+),[\\s\\S]*?"unitPrice":\\s*{[\\s\\S]*?"value":\\s*([\\d.]+)[\\s\\S]*?"net":\\s*{[\\s\\S]*?"value":\\s*([\\d.]+)';
+            var serviceMatches = prettyJsonText.match(new RegExp(servicePattern, 'gi'));
+
+
+
+            //Converting String to Numeric
+            var netValueRegex = /"net":\s*{[\s\S]*?"value":\s*"?(?:([0-9.]+))"?/g;
+            var totalNetValue = 0;
+            var match;
+            
+            while ((match = netValueRegex.exec(prettyJsonText)) !== null) {
+                var value = parseFloat(match[1]);
+                if (!isNaN(value)) {
+                    totalNetValue += value;
+                }
+            }
+            var serviceResults = previousResults;
+            var serviceCount = serviceMatches ? serviceMatches.length : 0;
+            serviceResults += '-----------------------------------------------------------------------------------<br>';
+            serviceResults += '<div style="font-weight: bold; font-size: 24px; margin-bottom: 20px;">';
+            serviceResults += 'Total Product/Service Count: ' + serviceCount;
+            serviceResults += '</div><br>';
+            serviceResults += '<div style="font-weight: bold; font-size: 24px; margin-bottom: 20px;">';
+            serviceResults += 'Total Net Value: ' + totalNetValue.toFixed(2);
+            serviceResults += '</div><br>';
+            serviceResults += '-----------------------------------------------------------------------------------<br>';
+
+          if (serviceMatches && serviceMatches.length > 0) {
+            serviceResults += '<div style="font-weight: bold; font-size: 24px; margin-bottom: 20px;">Total Services Found: ' + serviceMatches.length + '</div>';
+            for (var i = 0; i < serviceMatches.length; i++) {
+                var currentMatch = serviceMatches[i] ? serviceMatches[i] : '';
+                    var patientInvoicePattern = '"url":\\s*"[^"]*extension-patientInvoice"[\\s\\S]*?"valueIdentifier":\\s*{[\\s\\S]*?"value":\\s*"([^"]+)"';
+                    var extensionTaxPattern = '"url":\\s*"[^"]*extension-tax"[\\s\\S]*?"valueMoney":\\s*{\\s*"value":\\s*([\\d.]+)';
+                    var patientSharePattern = '"url":\\s*"[^"]*extension-patient-share"[\\s\\S]*?"valueMoney":\\s*{\\s*"value":\\s*([\\d.]+)';
+                    var payerSharePattern = '"url":\\s*"[^"]*extension-payer-share"[\\s\\S]*?"valueMoney":\\s*{\\s*"value":\\s*([\\d.]+)';
+
+                    //var patientInvoiceMatch = currentMatch.match(new RegExp(patientInvoicePattern, 'i'));
+                    //var extensionTaxMatch = currentMatch.match(new RegExp(extensionTaxPattern, 'i'));
+                    //var patientShareMatch = currentMatch.match(new RegExp(patientSharePattern, 'i'));
+                    //var payerShareMatch = currentMatch.match(new RegExp(payerSharePattern, 'i'));
+
+              
+                    var patientInvoice = currentMatch.match(new RegExp(patientInvoicePattern, 'i')) || currentMatch.match(new RegExp(patientInvoicePattern.replace('extension', 'item'), 'i')) || ['Not found'];
+                    var extensionTax = currentMatch.match(new RegExp(extensionTaxPattern, 'i')) || currentMatch.match(new RegExp(extensionTaxPattern.replace('extension', 'item'), 'i')) || ['Not found'];
+                    var patientShare = currentMatch.match(new RegExp(patientSharePattern, 'i')) || currentMatch.match(new RegExp(patientSharePattern.replace('extension', 'item'), 'i')) || ['Not found'];
+                    var payerShare = currentMatch.match(new RegExp(payerSharePattern, 'i')) || currentMatch.match(new RegExp(payerSharePattern.replace('extension', 'item'), 'i')) || ['Not found'];
+      
+
+                  var codePattern = '"productOrService":\\s*{[\\s\\S]*?"coding":\\s*\\[[\\s\\S]*?"code":\\s*"([^"]+)"|'
+                    + '"item":\\s*\\[[\\s\\S]*?"productOrService":\\s*{[\\s\\S]*?"coding":\\s*\\[[\\s\\S]*?"code":\\s*"([^"]+)"|'
+                    + '"extension":\\s*\\[[\\s\\S]*?"productOrService":\\s*{[\\s\\S]*?"coding":\\s*\\[[\\s\\S]*?"code":\\s*"([^"]+)"';
+
+                    //var codeMatches = currentMatch.match(new RegExp(codePattern, 'gi'));
+                    //var nphiesCode = codeMatches && codeMatches[0] ? codeMatches[0].match(/"code":\s*"([^"]+)"/)[1] : 'Not found';
+                    //var serviceCode = codeMatches && codeMatches[1] ? codeMatches[1].match(/"code":\s*"([^"]+)"/)[1] : 'Not found';
+
+                    var codeMatches = currentMatch.match(new RegExp(codePattern, 'gi'));
+                    var nphiesCode = 'Not found';
+                    var serviceCode = 'Not found';
+                    
+                    if (codeMatches) {
+                        for (var j = 0; j < codeMatches.length; j++) {
+                            var match = codeMatches[j].match(/"code":\s*"([^"]+)"/);
+                            if (match) {
+                                if (j === 0) {
+                                    nphiesCode = match[1];
+                                } else {
+                                    serviceCode = match[1];
+                                }
+                            }
+                        }
+                    }
+
+
+
+                    serviceResults += '-----------------------------------------------------------------------------------<br>';
+                    serviceResults += '<br>Product/Service :' + (i + 1) + ' <br>';
+                    //serviceResults += '<br>Patient Invoice: ' + (patientInvoiceMatch ? copyButton(patientInvoiceMatch[1]) : 'Not found') + '<br>';
+                    //serviceResults += 'Extension Tax: ' + (extensionTaxMatch ? copyButton(extensionTaxMatch[1]) : 'Not found') + '<br>';
+                    //serviceResults += 'Patient Share: ' + (patientShareMatch ? copyButton(patientShareMatch[1]) : 'Not found') + '<br>';
+                    //serviceResults += 'Payer Share: ' + (payerShareMatch ? copyButton(payerShareMatch[1]) : 'Not found') + '<br>';
+              
+                    serviceResults += 'Patient Invoice: ' + (patientInvoice[1] !== undefined ? copyButton(patientInvoice[1]) : 'Not found') + '<br>';
+                    serviceResults += 'Extension Tax: ' + (extensionTax[1] !== undefined ? copyButton(extensionTax[1]) : 'Not found') + '<br>';
+                    serviceResults += 'Patient Share: ' + (patientShare[1] !== undefined ? copyButton(patientShare[1]) : 'Not found') + '<br>';
+                    serviceResults += 'Payer Share: ' + (payerShare[1] !== undefined ? copyButton(payerShare[1]) : 'Not found') + '<br>';
+
+
+                    var displayPattern = '"display":\\s*"([^"]+)"';
+                    var nphiesCodePattern = '"productOrService":\\s*{[\\s\\S]*?"coding":\\s*\\[[\\s\\S]*?"code":\\s*"([^"]+)"';
+                    var serviceCodePattern = '"productOrService":\\s*{[\\s\\S]*?"coding":\\s*\\[[\\s\\S]+?},\\s*{[\\s\\S]*?"code":\\s*"([^"]+)"';
+                    var servicedPeriodStartPattern = '"servicedPeriod":\\s*{[\\s\\S]*?"start":\\s*"([^"]+)"';
+
+                    var quantityPattern = '"quantity":\\s*{\\s*"value":\\s*(\\d+)';
+                    var servicedDatePattern = '"servicedDate":\\s*"([^"]+)"';
+                    var unitPricePattern = '"unitPrice":\\s*{[\\s\\S]*?"value":\\s*([\\d.]+)';
+                    var netValuePattern = '"net":\\s*{[\\s\\S]*?"value":\\s*([\\d.]+)';
+
+                    var displayMatch = currentMatch.match(new RegExp(displayPattern, 'i'));
+                    var nphiesCodeMatch = currentMatch.match(new RegExp(nphiesCodePattern, 'i'));
+                    var serviceCodeMatch = currentMatch.match(new RegExp(serviceCodePattern, 'i'));
+
+                    var quantityMatch = currentMatch.match(new RegExp(quantityPattern, 'i'));
+                    var servicedDateMatch = currentMatch.match(new RegExp(servicedDatePattern, 'i'));
+                    var servicedPeriodStartMatch = currentMatch.match(new RegExp(servicedPeriodStartPattern, 'i'));
+                    var unitPriceMatch = currentMatch.match(new RegExp(unitPricePattern, 'i'));
+                    var netValueMatch = currentMatch.match(new RegExp(netValuePattern, 'i'));
+
+
+                    var nphiesCode = nphiesCodeMatch ? nphiesCodeMatch[1] : 'Not found';
+                    var serviceCode = serviceCodeMatch ? serviceCodeMatch[1] : 'Not found';
+
+                    serviceResults += 'Name: ' + (displayMatch ? displayMatch[1] : 'Not found') + '<br>';
+                    serviceResults += 'Nphies Code: ' + (nphiesCode ? copyButton(nphiesCode) : 'Not found') + '<br>';
+                    serviceResults += 'Service Code: ' + (serviceCode ? copyButton(serviceCode) : 'Not found') + '<br>';
+                    serviceResults += 'Serviced Date: ' + (servicedDateMatch ? copyButton(servicedDateMatch[1]) : 'Not found') + '<br>';
+                    serviceResults += 'Serviced Period Start: ' + (servicedPeriodStartMatch ? copyButton(servicedPeriodStartMatch[1]) : 'Not found') + '<br>';
+                    serviceResults += 'Quantity: ' + (quantityMatch ? quantityMatch[1] : 'Not found') + '<br>';
+                    serviceResults += 'Unit Price: ' + (unitPriceMatch ? copyButton(unitPriceMatch[1]) : 'Not found') + '<br>';
+                    serviceResults += 'Net Value: ' + (netValueMatch ? copyButton(netValueMatch[1]) : 'Not found') + '<br><br>';
+                }
             }
 
             document.getElementById('outputBox').innerHTML = serviceResults;
         }
 
-        function extractServices(serviceMatches, type, serviceResults) {
-            for (var i = 0; i < serviceMatches.length; i++) {
-                var currentMatch = serviceMatches[i];
-
-                var patterns = {
-                    "Patient Invoice": '"valueIdentifier":\\s*{[\\s\\S]*?"value":\\s*"([^"]+)"',
-                    "Extension Tax": '"extension-tax"[\\s\\S]*?"value":\\s*([\\d.]+)',
-                    "Patient Share": '"extension-patient-share"[\\s\\S]*?"value":\\s*([\\d.]+)',
-                    "Payer Share": '"extension-payer-share"[\\s\\S]*?"value":\\s*([\\d.]+)',
-                    "Nphies Code": '"code":\\s*"([^"]+)"',
-                    "Service Code": '"serviceCode":\\s*"([^"]+)"',
-                    "Name": '"display":\\s*"([^"]+)"',
-                    "Serviced Date": '"servicedDate":\\s*"([^"]+)"',
-                    "Serviced Period Start": '"servicedPeriod":\\s*{[\\s\\S]*?"start":\\s*"([^"]+)"',
-                    "Quantity": '"quantity":\\s*{\\s*"value":\\s*(\\d+)',
-                    "Unit Price": '"unitPrice":\\s*{[\\s\\S]*?"value":\\s*([\\d.]+)',
-                    "Net Value": '"net":\\s*{[\\s\\S]*?"value":\\s*([\\d.]+)'
-                };
-
-                serviceResults += `-----------------------------------------------------------------------------------<br><br>${type} Product/Service ${i + 1} <br>`;
-                
-                for (var key in patterns) {
-                    var match = currentMatch.match(new RegExp(patterns[key], 'i'));
-                    var value = match && match[1] ? copyButton(match[1]) : 'Not found';
-                    serviceResults += `${key}: ${value} <br>`;
-                }
-            }
-        }
-
         function copyButton(text) {
-            return `<span style="cursor: pointer; text-decoration: underline;" onclick="copyToClipboard('${text}')">${text}</span>`;
+            return '<span style="cursor: pointer; text-decoration: underline;" onclick="copyToClipboard(\'' + text + '\')">' + text + '</span>';
         }
 
         function copyToClipboard(text) {
