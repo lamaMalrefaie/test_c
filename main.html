@@ -163,125 +163,28 @@
                     'Timestamp': '"timestamp":\\s*"([^"]+)"',
                     'Claim ID': '"system":\\s*"[^"]*/claim",\\s*"value":\\s*"([^"]+)"',
                     'Practitioner Name': '"system":\\s*"http://nphies.sa/license/practitioner-license"[\\s\\S]*?"name"\\s*:\\s*\\[\\s*{\\s*"text"\\s*:\\s*"([^"]+)"',
-                    'PPatient Name': '"system":\\s*"http://sghj.com/identifier/mrn",\\s*"value":\\s*"([^"]+)"', 
                     'Patient Name': '"name":\\s*\\[[\\s\\S]*?"text":\\s*"([^"]+)"',
                     'ICD-10 Code (Sequence 1)': '"diagnosisCodeableConcept":\\s*{[\\s\\S]*?"system":\\s*"http://hl7.org/fhir/sid/icd-10-am",[\\s\\S]*?"code":\\s*"([^"]+)"[\\s\\S]*?"sequence":\\s*1',
                     'Diagnosis Type (Sequence 1)': '"type":\\s*\\[[\\s\\S]*?"system":\\s*"http://nphies.sa/terminology/CodeSystem/diagnosis-type",[\\s\\S]*?"code":\\s*"([^"]+)"[\\s\\S]*?"sequence":\\s*1'
                 };
-
-
-
-                var results = '';
+        
+                var results = '<h3>General Information</h3>';
                 var errorMessages = [];
-                var licensePattern = '"system":\\s*"http://nphies.sa/license/payer-license",\\s*"value":\\s*"([^"]+)"';
-                var licenseMatch = prettyJsonText.match(new RegExp(licensePattern, 'i'));
-                if (licenseMatch && licenseMatch[1] !== '7001571327') {
-                    errorMessages.push('it is not bupa License');
-                }
-
+        
                 for (var key in searchPatterns) {
                     var regex = new RegExp(searchPatterns[key], 'i');
                     var match = prettyJsonText.match(regex);
                     var value = match && match[1];
-                    // if (value) {
-                    //     if (key === 'National or Iqama ID' && !/^\d{10}$/.test(value)) {
-                    //         errorMessages.push('Error: National or Iqama ID should be exactly 10 digits.');
-                    //     } else if (key === 'Member ID' && !/^\d{8}$/.test(value)) {
-                    //         errorMessages.push('Error: Member ID should be exactly 8 digits.');
-                    //     } else {
-                    //         results += key + ': ' + copyButton(value) + '<br>';
-                    //     }
-                    // } else {
-                    //     results += key + ': Not found<br>';
-                    // }
+        
                     results += key + ': ' + (value ? copyButton(value) : 'Not found') + '<br>';
                 }
-
-                var licensePattern = '"system":\\s*"http://nphies.sa/license/payer-license",\\s*"value":\\s*"([^"]+)"';
-                var licenseMatch = prettyJsonText.match(new RegExp(licensePattern, 'i'));
-                if (licenseMatch && licenseMatch[1] !== '7001571327') {
-                    errorMessages.push('it is not Bupa License');
-                }
-
-                if (errorMessages.length > 0) {
-                    alert(errorMessages.join('\n'));
-                }
-
-                document.getElementById('outputBox').innerHTML = results;
-                processProductOrService(prettyJsonText, results);
+        
+                return results;
             } catch (e) {
-                document.getElementById('outputBox').innerText = 'Error parsing JSON: ' + e.message;
+                return '<p>Error parsing JSON: ' + e.message + '</p>';
             }
-            try {
-                var jsonObj = JSON.parse(prettyJsonText);
-                var licensePattern = /"system":\s*"http:\/\/nphies\.sa\/license\/payer-license",\s*"value":\s*"([^"]+)"/g;
-                var match;
-                var licenseCount = 0;
-                var correctLicenseCount = 0;
-                var incorrectLicenses = [];
-
-                while (match = licensePattern.exec(prettyJsonText)) {
-                    licenseCount++;
-                    if (match[1] === "7001571327") {
-                        correctLicenseCount++;
-                    } else {
-                        incorrectLicenses.push(match[1]);
-                    }
-                }
-
-                if (incorrectLicenses.length > 0) {
-                    incorrectLicenses.forEach((license, index) => {
-                        alert("Number (" + (index + 1) + ") is not Bupa license: " + license);
-                    });
-                }
-
-                document.getElementById('outputBox').innerHTML = "Total licenses found: " + licenseCount + "<br>Correct license '456789098765' found: " + correctLicenseCount;
-                var optionalPatterns = {
-                    'Outcome': '"outcome":\\s*"([^"]+)"',
-                    'Disposition': '"disposition":\\s*"([^"]+)"'
-                };
-
-                var results = '';
-                var errorMessages = [];
-                for (var key in searchPatterns) {
-                    var regex = new RegExp(searchPatterns[key], 'i');
-                    var match = prettyJsonText.match(regex);
-                    var value = match && match[1];
-                    if (value) {
-                        if (key === 'National or Iqama ID' && !/^\d{10}$/.test(value)) {
-                            errorMessages.push('Error: National or Iqama ID should be exactly 10 digits.');
-                        } else if (key === 'Member ID' && !/^\d{8}$/.test(value)) {
-                            errorMessages.push('Error: Member ID should be exactly 8 digits.');
-                        } else {
-                            results += key + ': ' + copyButton(value) + '<br>';
-                        }
-                    } else {
-                        results += key + ': Not found<br>';
-                    }
-                }
-
-                for (var key in optionalPatterns) {
-                    var regex = new RegExp(optionalPatterns[key], 'i');
-                    var match = prettyJsonText.match(regex);
-                    if (match) {
-                        results += key + ': ' + match[1] + '<br>';
-                    }
-                }
-
-                if (errorMessages.length > 0) {
-                    alert(errorMessages.join('\n'));
-                }
-
-                document.getElementById('outputBox').innerHTML = results;
-                processProductOrService(prettyJsonText, results);
-            } catch (e) {
-                document.getElementById('outputBox').innerText = 'Error parsing JSON: ' + e.message;
-            }
-
-            processProductOrService(prettyJsonText, results);
-
-            
         }
+
 
        function processProductOrService(prettyJsonText, previousResults = '') {
         try {
