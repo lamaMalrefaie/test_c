@@ -120,43 +120,37 @@
         <div class="clear-box" onclick="clearContent()">Clear</div>
     </div>
     <script>
-    function processJson() {
-        var inputText = document.getElementById('inputBox').value;
-        try {
-            var jsonObj = JSON.parse(inputText);
-            var prettyJson = JSON.stringify(jsonObj, null, 2);
-            document.getElementById('beutiBox').value = prettyJson;
-        } catch (e) {
-            document.getElementById('beutiBox').value = 'Invalid JSON: ' + e.message;
-            document.getElementById('outputBox').innerText = '';
-            return;
+            function processJson() {
+            var inputText = document.getElementById('inputBox').value;
+            try {
+                var jsonObj = JSON.parse(inputText);
+                var prettyJson = JSON.stringify(jsonObj, null, 2);
+                document.getElementById('beutiBox').value = prettyJson;
+            } catch (e) {
+                document.getElementById('beutiBox').value = 'Invalid JSON: ' + e.message;
+                document.getElementById('outputBox').innerText = '';
+                return;
+            }
+        
+            let generalResults = searchJson(prettyJson);
+        
+            let serviceResults = processProductOrService(prettyJson);
+
+            document.getElementById('outputBox').innerHTML = generalResults + "<br><br>" + serviceResults;
         }
-
-            searchJson(prettyJson);
-            processProductOrService(prettyJson);
-        }
-
-        function clearContent() {
-            document.getElementById('inputBox').value = '';
-            document.getElementById('beutiBox').value = '';
-            document.getElementById('outputBox').innerText = '';
-        }
-
-        var ServicedDatePattern = '"servicedDate":\\s*"([^"]+)"';
-
+        
         function searchJson(prettyJsonText) {
             try {
                 var searchPatterns = {
-                    'resourceType': '"eventCoding":\\s*{\\s*"system":\\s*"[^"]*",\\s*"code":\\s*"([^"]+)"',
+                    'Resource Type': '"eventCoding":\\s*{\\s*"system":\\s*"[^"]*",\\s*"code":\\s*"([^"]+)"',
                     'Bundle ID': '"Bundle"[\\s\\S]*?"id":\\s*"([^"]+)"',
-                    'Claim Type': '/CodeSystem/claim-type"[\\s\\S]*?"code":\\s*"([^"]+)"',
-                    'Claim Sub-type': '/CodeSystem/claim-subtype"[\\s\\S]*?"code":\\s*"([^"]+)"',
-                    'Member ID': '/memberid"[\\s\\S]*?"value":\\s*"([^"]+)"',
+                    'Claim Type': '"CodeSystem/claim-type"[\\s\\S]*?"code":\\s*"([^"]+)"',
+                    'Claim Sub-type': '"CodeSystem/claim-subtype"[\\s\\S]*?"code":\\s*"([^"]+)"',
+                    'Member ID': '"memberid"[\\s\\S]*?"value":\\s*"([^"]+)"',
                     'National or Iqama ID': '(?:nphies\\.sa/identifier/nationalid|sa/identifier/iqama)"[\\s\\S]*?"value":\\s*"([\\d]+)"',
-                    'Organization ID': '.sa/license/provider-license"[\\s\\S]*?"value":\\s*"([^"]+)"',
+                    'Organization ID': '"sa/license/provider-license"[\\s\\S]*?"value":\\s*"([^"]+)"',
                     'preAuthRef': '"preAuthRef":\\s*\\[\\s*"([^"]+)"\\s*\\]',
                     'Gender': '"gender":\\s*"([^"]+)"',
-                    'Extension Episode': '"url":\\s*"http://nphies.sa/fhir/ksa/nphies-fs/StructureDefinition/extension-episode"[\\s\\S]*?"value":\\s*"([^"]+)"',
                     'Practitioner License': '"system":\\s*"http://nphies.sa/license/practitioner-license",\\s*"value":\\s*"([^"]+)"',
                     'Accounting Period Value Date': '"url":\\s*"http://nphies.sa/fhir/ksa/nphiesfs/StructureDefinition/extension-accountingPeriod"[\\s\\S]*?"valueDate":\\s*"([^"]+)"',
                     'Specialty Code': '"specialty":\\s*\\[[\\s\\S]*?"code":\\s*"([^"]+)"',
@@ -164,19 +158,15 @@
                     'Claim ID': '"system":\\s*"[^"]*/claim",\\s*"value":\\s*"([^"]+)"',
                     'Practitioner Name': '"system":\\s*"http://nphies.sa/license/practitioner-license"[\\s\\S]*?"name"\\s*:\\s*\\[\\s*{\\s*"text"\\s*:\\s*"([^"]+)"',
                     'Patient Name': '"name":\\s*\\[[\\s\\S]*?"text":\\s*"([^"]+)"',
-                    'ICD-10 Code (Sequence 1)': '"diagnosisCodeableConcept":\\s*{[\\s\\S]*?"system":\\s*"http://hl7.org/fhir/sid/icd-10-am",[\\s\\S]*?"code":\\s*"([^"]+)"[\\s\\S]*?"sequence":\\s*1',
-                    'Diagnosis Type (Sequence 1)': '"type":\\s*\\[[\\s\\S]*?"system":\\s*"http://nphies.sa/terminology/CodeSystem/diagnosis-type",[\\s\\S]*?"code":\\s*"([^"]+)"[\\s\\S]*?"sequence":\\s*1'
+                    'ICD-10 Code (Sequence 1)': '"diagnosisCodeableConcept":\\s*{[\\s\\S]*?"system":\\s*"http://hl7.org/fhir/sid/icd-10-am",[\\s\\S]*?"code":\\s*"([^"]+)"[\\s\\S]*?"sequence":\\s*1'
                 };
         
                 var results = '<h3>General Information</h3>';
-                var errorMessages = [];
-        
                 for (var key in searchPatterns) {
                     var regex = new RegExp(searchPatterns[key], 'i');
                     var match = prettyJsonText.match(regex);
                     var value = match && match[1];
-        
-                    results += key + ': ' + (value ? copyButton(value) : 'Not found') + '<br>';
+                    results += `<b>${key}:</b> ${value ? copyButton(value) : 'Not found'}<br>`;
                 }
         
                 return results;
@@ -185,105 +175,78 @@
             }
         }
         
-
-
-       function processProductOrService(prettyJsonText, previousResults = '') {
-        try {
-            var jsonObj = JSON.parse(prettyJsonText);
-            var serviceResults = previousResults;
-            var totalNetValue = 0;
-            var serviceCount = 0;
-
-            if (jsonObj.entry) {
-                jsonObj.entry.forEach(entry => {
-                    if (entry.resource) {
-                        let items = [];
-
-                        // التحقق من OP حيث يكون productOrService داخل resource مباشرة
-                        if (entry.resource.productOrService) {
-                            items.push(entry.resource);
+        function processProductOrService(prettyJsonText) {
+            try {
+                var jsonObj = JSON.parse(prettyJsonText);
+                var serviceResults = "<h3>Product/Service Details</h3>";
+                var totalNetValue = 0;
+                var serviceCount = 0;
+        
+                if (jsonObj.entry) {
+                    jsonObj.entry.forEach(entry => {
+                        if (entry.resource) {
+                            let items = [];
+        
+                            if (entry.resource.productOrService) {
+                                items.push(entry.resource);
+                            }
+        
+                            if (entry.resource.item) {
+                                items = [...items, ...entry.resource.item];
+                            }
+        
+                            items.forEach(service => {
+                                serviceCount++;
+        
+                                let productOrService = service.productOrService ? service.productOrService.coding : [];
+                                let nphiesCode = productOrService.length > 0 ? productOrService.map(c => c.code).join(', ') : 'Not found';
+                                let serviceCode = productOrService.length > 1 ? productOrService[1].code : 'Not found';
+                                let displayName = productOrService.length > 0 ? productOrService[0].display : 'Not found';
+        
+                                let servicedDate = service.servicedDate || 'Not found';
+                                let quantity = service.quantity ? service.quantity.value : 'Not found';
+                                let unitPrice = service.unitPrice ? service.unitPrice.value : 'Not found';
+                                let netValue = service.net ? service.net.value : 0;
+        
+                                totalNetValue += parseFloat(netValue) || 0;
+        
+                                serviceResults += `
+                                    <hr>
+                                    <b>Product/Service: ${serviceCount}</b><br>
+                                    Name: ${displayName}<br>
+                                    Nphies Code: ${copyButton(nphiesCode)}<br>
+                                    Service Code: ${copyButton(serviceCode)}<br>
+                                    Serviced Date: ${copyButton(servicedDate)}<br>
+                                    Quantity: ${copyButton(quantity)}<br>
+                                    Unit Price: ${copyButton(unitPrice)}<br>
+                                    Net Value: ${copyButton(netValue.toFixed(2))}<br>
+                                `;
+                            });
                         }
-                        
-                        // التحقق من IP حيث يكون productOrService داخل item داخل resource
-                        if (entry.resource.item) {
-                            items = [...items, ...entry.resource.item];
-                        }
-
-                        items.forEach((service, index) => {
-                            serviceCount++;
-
-                            let productOrService = service.productOrService ? service.productOrService.coding : [];
-                            let nphiesCode = productOrService.length > 0 ? productOrService.map(c => c.code).join(', ') : 'Not found';
-                            let serviceCode = productOrService.length > 1 ? productOrService[1].code : 'Not found';
-                            let displayName = productOrService.length > 0 ? productOrService[0].display : 'Not found';
-
-                            let servicedDate = service.servicedDate || 'Not found';
-                            let quantity = service.quantity ? service.quantity.value : 'Not found';
-                            let unitPrice = service.unitPrice ? service.unitPrice.value : 'Not found';
-                            let netValue = service.net ? service.net.value : 0;
-
-                            totalNetValue += parseFloat(netValue) || 0;
-
-                            let extensionTax = findExtensionValue(service.extension, 'extension-tax') || 'Not found';
-                            let patientShare = findExtensionValue(service.extension, 'extension-patient-share') || 'Not found';
-                            let payerShare = findExtensionValue(service.extension, 'extension-payer-share') || 'Not found';
-                            let patientInvoice = findExtensionValue(service.extension, 'extension-patientInvoice') || 'Not found';
-
-                            serviceResults += `
-                                -----------------------------------------------------------------------------------<br>
-                                <br>Product/Service : ${serviceCount} <br>
-                                Patient Invoice: ${copyButton(patientInvoice)}<br>
-                                Extension Tax: ${copyButton(extensionTax)}<br>
-                                Patient Share: ${copyButton(patientShare)}<br>
-                                Payer Share: ${copyButton(payerShare)}<br>
-                                Name: ${displayName}<br>
-                                Nphies Code: ${copyButton(nphiesCode)}<br>
-                                Service Code: ${copyButton(serviceCode)}<br>
-                                Serviced Date: ${copyButton(servicedDate)}<br>
-                                Quantity: ${copyButton(quantity)}<br>
-                                Unit Price: ${copyButton(unitPrice)}<br>
-                                Net Value: ${copyButton(netValue.toFixed(2))}<br><br>
-                            `;
-                        });
-                    }
-                });
+                    });
+                }
+        
+                serviceResults += `<br><b>Total Net Value:</b> ${totalNetValue.toFixed(2)}<br>`;
+                return serviceResults;
+            } catch (e) {
+                return '<p>Error parsing JSON: ' + e.message + '</p>';
             }
-
-            serviceResults = `
-                <div style="font-weight: bold; font-size: 24px; margin-bottom: 20px;">
-                    Total Product/Service Count: ${serviceCount}
-                </div><br>
-                <div style="font-weight: bold; font-size: 24px; margin-bottom: 20px;">
-                    Total Net Value: ${totalNetValue.toFixed(2)}
-                </div><br>
-                ${serviceResults}
-            `;
-
-            document.getElementById('outputBox').innerHTML = serviceResults;
-        } catch (e) {
-            document.getElementById('outputBox').innerText = 'Error parsing JSON: ' + e.message;
         }
-    }
+        
+        function copyButton(text) {
+            return `<span style="cursor: pointer; text-decoration: underline;" onclick="copyToClipboard('${text}')">${text}</span>`;
+        }
+        
+        function copyToClipboard(text) {
+            var dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = text;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+            alert('Copied: ' + text);
+        }
 
-    function findExtensionValue(extensions, extensionType) {
-        if (!extensions) return null;
-        let match = extensions.find(ext => ext.url && ext.url.includes(extensionType));
-        return match ? (match.valueMoney ? match.valueMoney.value : match.valueIdentifier ? match.valueIdentifier.value : 'Not found') : 'Not found';
-    }
-
-    function copyButton(text) {
-        return `<span style="cursor: pointer; text-decoration: underline;" onclick="copyToClipboard('${text}')">${text}</span>`;
-    }
-
-    function copyToClipboard(text) {
-        var dummy = document.createElement("textarea");
-        document.body.appendChild(dummy);
-        dummy.value = text;
-        dummy.select();
-        document.execCommand("copy");
-        document.body.removeChild(dummy);
-        alert('Copied: ' + text);
-    }
     </script>
 </body>
 </html>
